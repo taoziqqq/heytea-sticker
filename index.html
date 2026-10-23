@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>喜茶喜贴上传</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#f6f4ef;margin:0;padding:24px;color:#3b2f2f}
+  .card{max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.06)}
+  h1{font-size:20px;margin:0 0 4px;color:#6b4f3d}
+  p.desc{color:#8a7a6a;font-size:13px;margin:0 0 20px}
+  label{display:block;font-size:13px;color:#6b4f3d;margin:14px 0 6px;font-weight:600}
+  input[type=password],input[type=file]{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px;background:#fff}
+  .btn{width:100%;padding:13px;margin-top:18px;border:0;border-radius:10px;background:#6b4f3d;color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+  .btn:disabled{opacity:.5}
+  #status{margin-top:16px;font-size:14px;word-break:break-all;display:none}
+  .ok{color:#2e7d32}.err{color:#c62828}.info{color:#6b4f3d}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>喜茶喜贴上传</h1>
+  <p class="desc">把 596×832 的设计图上传到喜茶账户。token 只保存在本机浏览器。</p>
+
+  <label for="tok">授权 Token（<b>Bearer eyJ... 中 eyJ 开头的部分</b>）</label>
+  <input type="password" id="tok" placeholder="粘贴 eyJ... 开头的 token" autocomplete="off">
+
+  <label for="file">选择图片（PNG，建议 596×832）</label>
+  <input type="file" id="file" accept="image/*">
+
+  <button class="btn" id="go">上传</button>
+  <div id="status"></div>
+</div>
+<script>
+var SALT="r5YWPjgSGAT2dbOJzwiDBK", UID=38287030;
+(function(){try{var t=localStorage.getItem("ht_token");if(t)document.getElementById("tok").value=t}catch(e){}})();
+
+function show(msg,cls){var s=document.getElementById("status");s.className=cls;s.style.display="block";s.textContent=msg}
+
+function hex(buf){return Array.prototype.map.call(new Uint8Array(buf),function(b){return ("0"+b.toString(16)).slice(-2)}).join("")}
+
+async function upload(){
+  var tok=document.getElementById("tok").value.trim();
+  var file=document.getElementById("file").files[0];
+  if(!tok){show("请先粘贴 token","err");return}
+  if(!file){show("请先选择图片","err");return}
+  try{localStorage.setItem("ht_token",tok)}catch(e){}
+  var go=document.getElementById("go");go.disabled=true;
+  show("正在加密并上传…","info");
+  try{
+    var ab=await file.arrayBuffer();
+    var digest=await crypto.subtle.digest("SHA-512",ab);
+    var hash=hex(digest);
+    var t=Date.now();
+    var sign=md5(SALT+UID+t);
+    var url="https://go.heytea.com/api/service-cps/user/diy?sign="+sign+"&t="+t+"&hash="+hash;
+    var fd=new FormData();
+    fd.append("file",file,"image.png");
+    var resp=await fetch(url,{
+      method:"POST",
+      headers:{
+        "X-client":"weapp",
+        "X-client-version":"3.326.0.p9",
+        "Authorization":"Bearer "+tok
+      },
+      body:fd
+    });
+    var text=await resp.text();
+    show("HTTP "+resp.status+"\n"+text, /"code"\s*:\s*0/.test(text)?"ok":"err");
+  }catch(e){
+    show("失败："+e+(e&&e.message?"（"+e.message+"）":"")+"\n\n若是被风控拦截(405/非法请求)，请切换到流量网络或换个网络重试。","err");
+  }finally{
+    go.disabled=false;
+  }
+}
+document.getElementById("go").addEventListener("click",upload);
+</script>
+</body>
+</html>
